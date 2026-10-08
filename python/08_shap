@@ -1,0 +1,293 @@
+import os
+import numpy as np
+import pandas as pd
+import lightgbm as lgb
+import shap
+from sklearn.metrics import roc_auc_score, average_precision_score
+
+train_path = r"C:/Users/82105/Desktop/push_analysis/data/processed/08_train_final.parquet"
+val_path = r"C:/Users/82105/Desktop/push_analysis/data/processed/08_val_final.parquet"
+
+output_dir = r"C:/Users/82105/Desktop/push_analysis/data/processed/shap_final"
+os.makedirs(output_dir, exist_ok=True)
+
+train = pd.read_parquet(train_path)
+val = pd.read_parquet(val_path)
+
+features = [
+    "avg_user_total_ignore_rate",
+    "channel",
+    "hour_limit",
+    "subject_length",
+    "subject_with_personalization",
+    "subject_with_deadline",
+    "subject_with_emoji",
+    "subject_with_bonuses",
+    "subject_with_discount",
+    "subject_with_saleout",
+    "mar_ignore_cnt",
+    "beh_ignore_cnt",
+    "interest_ignore_cnt",
+    "life_ignore_cnt",
+    "trans_ignore_cnt",
+    "total_ignore_cnt",
+    "other_ignore_cnt"
+]
+
+boolean_features = [
+    "subject_with_personalization",
+    "subject_with_deadline",
+    "subject_with_emoji",
+    "subject_with_bonuses",
+    "subject_with_discount",
+    "subject_with_saleout"
+]
+
+for col in boolean_features:
+    train[col] = train[col].astype("boolean").fillna(False).astype(bool)
+    val[col] = val[col].astype("boolean").fillna(False).astype(bool)
+
+channel_categories = train["channel"].astype("category").cat.categories
+
+train["channel"] = pd.Categorical(
+    train["channel"],
+    categories=channel_categories
+)
+
+val["channel"] = pd.Categorical(
+    val["channel"],
+    categories=channel_categories
+)
+
+X_train = train[features]
+X_val = val[features]
+
+y_open_train = train["is_opened"].astype(int)
+y_open_val = val["is_opened"].astype(int)
+
+y_click_train = train["is_clicked"].astype(int)
+y_click_val = val["is_clicked"].astype(int)
+
+open_model = lgb.LGBMClassifier(
+    objective="binary",
+    n_estimators=300,
+    learning_rate=0.05,
+    num_leaves=31,
+    random_state=42,
+    n_jobs=-1
+)
+
+click_model = lgb.LGBMClassifier(
+    objective="binary",
+    n_estimators=300,
+    learning_rate=0.05,
+    num_leaves=31,
+    random_state=42,
+    n_jobs=-1
+)
+
+open_model.fit(X_train, y_open_train)
+click_model.fit(X_train, y_click_train)
+
+pred_open = open_model.predict_proba(X_val)[:, 1]
+pred_click = click_model.predict_proba(X_val)[:, 1]
+
+print(
+    "Open ROC-AUC:",
+    roc_auc_score(y_open_val, pred_open)
+)
+
+print(
+    "Open PR-AUC:",
+    average_precision_score(y_open_val, pred_open)
+)
+
+print(
+    "Click ROC-AUC:",
+    roc_auc_score(y_click_val, pred_click)
+)
+
+print(
+    "Click PR-AUC:",
+    average_precision_score(y_click_val, pred_click)
+)
+
+open_explainer = shap.TreeExplainer(open_model)
+click_explainer = shap.TreeExplainer(click_model)
+
+open_shap = open_explainer.shap_values(X_val)
+
+click_shap = click_explainer.shap_values(X_val)
+
+if isinstance(open_shap, list):
+    open_shap = open_shap[1]
+
+if isinstance(click_shap, list):
+    click_shap = click_shap[1]
+
+feature_importance_rows = []
+dependence_rows = []
+shap_sample_rows = []
+
+categories = [
+    "Marketing",
+    "Behavioral",
+    "Interest",
+    "Lifecycle",
+    "Transactional"
+]
+
+for category in categories:
+
+    category_mask = val["category"].eq(category)
+
+    X_category = X_val.loc[category_mask].copy()
+
+    open_category_shap = open_shap[category_mask.values]
+    click_category_shap = click_shap[category_mask.values]
+
+    for target, shap_values in [
+        ("open", open_category_shap),
+        ("click", click_category_shap)
+    ]:
+
+        mean_abs_shap = np.abs(shap_values).mean(axis=0)
+        mean_shap = shap_values.mean(axis=0)
+
+        for feature, abs_value, signed_value in zip(
+            features,
+            mean_abs_shap,
+            mean_shap
+        ):
+            feature_importance_rows.append({
+                "category": category,
+                "target": target,
+                "feature": feature,
+                "mean_abs_shap": float(abs_value),
+                "mean_shap": float(signed_value),
+                "n": len(X_category)
+            })
+
+    other_idx = features.index("other_ignore_cnt")
+
+    open_other_shap = open_category_shap[:, other_idx]
+    click_other_shap = click_category_shap[:, other_idx]
+
+    dependence_df = pd.DataFrame({
+        "category": category,
+        "other_ignore_cnt": X_category["other_ignore_cnt"].values,
+        "open_shap": open_other_shap,
+        "click_shap": click_other_shap
+    })
+
+    dependence_grouped = (
+        dependence_df
+        .groupby("other_ignore_cnt", dropna=False)
+        .agg(
+            open_mean_shap=("open_shap", "mean"),
+            open_mean_abs_shap=("open_shap", lambda x: np.abs(x).mean()),
+            click_mean_shap=("click_shap", "mean"),
+            click_mean_abs_shap=("click_shap", lambda x: np.abs(x).mean()),
+            n=("open_shap", "size")
+        )
+        .reset_index()
+    )
+
+    dependence_rows.extend(
+        dependence_grouped.to_dict("records")
+    )
+
+    plot_n = min(50000, len(X_category))
+
+    if plot_n > 0:
+
+        sample_idx = np.random.RandomState(42).choice(
+            len(X_category),
+            size=plot_n,
+            replace=False
+        )
+
+        X_sample = X_category.iloc[sample_idx]
+
+        open_sample_shap = open_category_shap[sample_idx]
+        click_sample_shap = click_category_shap[sample_idx]
+
+        for i, row_idx in enumerate(X_sample.index):
+
+            row = {
+                "category": category,
+                "row_index": row_idx,
+                "other_ignore_cnt": X_sample.loc[row_idx, "other_ignore_cnt"]
+            }
+
+            for j, feature in enumerate(features):
+                row[f"open_shap_{feature}"] = float(
+                    open_sample_shap[i, j]
+                )
+                row[f"click_shap_{feature}"] = float(
+                    click_sample_shap[i, j]
+                )
+
+            shap_sample_rows.append(row)
+
+feature_importance_df = pd.DataFrame(
+    feature_importance_rows
+)
+
+dependence_df = pd.DataFrame(
+    dependence_rows
+)
+
+shap_sample_df = pd.DataFrame(
+    shap_sample_rows
+)
+
+feature_importance_df.to_csv(
+    os.path.join(
+        output_dir,
+        "shap_feature_importance_by_category.csv"
+    ),
+    index=False,
+    encoding="utf-8-sig"
+)
+
+dependence_df.to_csv(
+    os.path.join(
+        output_dir,
+        "shap_other_ignore_dependence_by_category.csv"
+    ),
+    index=False,
+    encoding="utf-8-sig"
+)
+
+shap_sample_df.to_parquet(
+    os.path.join(
+        output_dir,
+        "shap_sample_by_category.parquet"
+    ),
+    index=False
+)
+
+print(
+    "Saved:",
+    os.path.join(
+        output_dir,
+        "shap_feature_importance_by_category.csv"
+    )
+)
+
+print(
+    "Saved:",
+    os.path.join(
+        output_dir,
+        "shap_other_ignore_dependence_by_category.csv"
+    )
+)
+
+print(
+    "Saved:",
+    os.path.join(
+        output_dir,
+        "shap_sample_by_category.parquet"
+    )
+)

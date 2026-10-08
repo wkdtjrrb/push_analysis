@@ -1,0 +1,9 @@
+.venv/
+.vscode/
+__pycache__/
+*.duckdb
+*.duckdb.*
+*.db
+data/
+*.parquet
+duckdb
