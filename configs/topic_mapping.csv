@@ -1,0 +1,29 @@
+topic,category,trigger_type,message_purpose
+sale out,Marketing,Campaign,Promotion
+event,Marketing,Campaign,Promotion
+abandoned cart,Behavioral,UserBehavior,Conversion
+abandoned view,Behavioral,UserBehavior,Conversion
+abandoned search,Behavioral,UserBehavior,Conversion
+abandoned category,Behavioral,UserBehavior,Conversion
+price drop,Interest,ProductEvent,Conversion
+added to wish list,Interest,UserBehavior,Engagement
+removed from wish list,Interest,UserBehavior,Engagement
+back in stock,Interest,ProductEvent,Conversion
+wish list status,Interest,UserBehavior,Engagement
+order created,Transactional,OrderEvent,Information
+order shipped,Transactional,OrderEvent,Information
+order ready for pickup,Transactional,OrderEvent,Information
+order pickup still pending,Transactional,OrderEvent,Information
+order reminder,Transactional,OrderEvent,Information
+order cancelled,Transactional,OrderEvent,Information
+welcome campaign,Lifecycle,UserLifecycle,Onboarding
+welcome letter,Lifecycle,UserLifecycle,Onboarding
+subscribed,Lifecycle,UserLifecycle,Onboarding
+profile updated,Lifecycle,UserLifecycle,Engagement
+user added to segment,Lifecycle,UserLifecycle,Engagement
+happy birthday,Lifecycle,ScheduledEvent,Retention
+recent purchase,Lifecycle,PurchaseEvent,Engagement
+offer after purchase,Lifecycle,PurchaseEvent,Conversion
+leave review,Lifecycle,PurchaseEvent,Engagement
+bonuses expired,Lifecycle,ScheduledEvent,Retention
+double opt in,Lifecycle,UserLifecycle,Onboarding
