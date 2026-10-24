@@ -1,5 +1,4 @@
 # Push Notification Optimization
-
 (사용자 무시 행동을 활용한 푸시 발송 효율 개선)
 
 ## Project Overview
