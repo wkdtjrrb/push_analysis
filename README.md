@@ -17,12 +17,23 @@
 
 대규모 데이터를 추출/전처리/행동 변수 생성/모델 평가 단계로 나누어 처리했습니다.
 
-분석 규모	약 1.6억 건, 400만 명 이상의 사용자
-푸시 카테고리	Marketing, Behavioral, Interest, Lifecycle, Transactional
-사용자 행동	오픈, 클릭, 구매 여부
-주요 행동 변수	카테고리별 누적 무시 횟수, 전체 연속 무시 횟수, 사용자 평균 무시율
-테스트 데이터 9,663,836건
-활용 도구	SQL, DuckDB, Python, Power BI
+분석 규모	
+- 약 1.6억 건, 400만 명 이상의 사용자
+  
+푸시 카테고리
+- Marketing, Behavioral, Interest, Lifecycle, Transactional
+  
+사용자 행동
+- 오픈, 클릭, 구매 여부
+
+주요 행동 변수	
+- 카테고리별 누적 무시 횟수, 전체 연속 무시 횟수, 사용자 평균 무시율
+
+테스트 데이터 
+- 9,663,836건
+
+활용 도구	
+- SQL, DuckDB, Python, Power BI
 
 
 ## Insights Summary
